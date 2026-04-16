@@ -1,0 +1,9 @@
+# Test 5: Taint through a loop — fixed-point needed
+input seed
+total := 0
+i := 0
+while i < 5 do
+  total := total + seed
+  i := i + 1
+end
+print total

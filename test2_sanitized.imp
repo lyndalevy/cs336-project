@@ -1,0 +1,4 @@
+# Test 2: Sanitized input — no warning expected
+input user
+sanitize(user)
+sql_exec(user)

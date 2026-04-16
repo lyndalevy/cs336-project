@@ -1,0 +1,4 @@
+# Test 1: SQL Injection — tainted input flows directly to sql_exec
+input user
+query := user
+sql_exec(query)

@@ -1,0 +1,5 @@
+# Test 6: Clean program — no user input, no taint
+x := 10
+y := 20
+z := x + y
+print z

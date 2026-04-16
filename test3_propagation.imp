@@ -1,0 +1,5 @@
+# Test 3: Taint propagation through multiple assignments
+input name
+greeting := name
+msg := greeting
+html_output(msg)
