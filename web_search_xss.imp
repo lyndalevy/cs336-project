@@ -1,0 +1,5 @@
+# Web Simulation: Search Page (XSS Vulnerable)
+# User search query is reflected back in HTML without escaping
+input search_query
+results := search_query
+html_output(results)

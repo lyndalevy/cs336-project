@@ -1,0 +1,9 @@
+# Web Simulation: Comment System (Properly Secured)
+# Same scenario but with proper sanitization
+input comment_text
+input author_name
+sanitize(comment_text)
+sanitize(author_name)
+post := author_name + comment_text
+sql_exec(post)
+html_output(comment_text)

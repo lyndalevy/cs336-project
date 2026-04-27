@@ -1,0 +1,11 @@
+# Web Simulation: Contact Form (Multiple Vulns)
+# Models a contact form where all fields are user-controlled
+# and used in both database storage and email rendering
+input name
+input email
+input message
+record := name + email
+body := record + message
+sql_exec(body)
+html_output(name)
+send_response(message)

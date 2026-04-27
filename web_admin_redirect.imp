@@ -1,0 +1,11 @@
+# Web Simulation: Admin Panel
+# User input determines which page to load
+# Unsanitized redirect = open redirect vulnerability
+input user_role
+input target_page
+if user_role > 0 then
+  dest := target_page
+else
+  dest := 0
+end
+redirect(dest)

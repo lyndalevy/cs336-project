@@ -1,0 +1,7 @@
+# Web Simulation: API Endpoint (Code Injection)
+# User-supplied data is passed to eval — extremely dangerous
+input api_input
+input callback
+data := api_input
+eval(data)
+exec(callback)

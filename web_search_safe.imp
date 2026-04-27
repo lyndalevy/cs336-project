@@ -1,0 +1,6 @@
+# Web Simulation: Search Page (Properly Secured)
+# Same as above but input is escaped before rendering
+input search_query
+safe_query := search_query
+html_escape(safe_query)
+html_output(safe_query)

@@ -1,0 +1,9 @@
+# Web Simulation: Comment System (Stored XSS)
+# User posts a comment which gets stored in DB
+# and later rendered to other users without escaping
+input comment_text
+input author_name
+post := author_name + comment_text
+sql_exec(post)
+display := comment_text
+html_output(display)

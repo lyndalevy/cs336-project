@@ -1,0 +1,7 @@
+# Web Simulation: Login Form
+# Models a login page where username and password
+# are submitted via a form and used in a SQL query
+input username
+input password
+credentials := username + password
+sql_query(credentials)
