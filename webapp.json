@@ -1,0 +1,26 @@
+{
+  "_comment": "Policy for web application security: SQL injection + XSS",
+  "sources": [
+    "input",
+    "get_param",
+    "post_param",
+    "cookie",
+    "http_header",
+    "url_param"
+  ],
+  "sinks": [
+    "sql_exec",
+    "sql_query",
+    "html_output",
+    "innerHTML",
+    "redirect",
+    "send_response"
+  ],
+  "sanitizers": [
+    "escape",
+    "html_escape",
+    "parameterize",
+    "validate",
+    "sanitize"
+  ]
+}

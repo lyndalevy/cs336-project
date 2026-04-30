@@ -1,0 +1,23 @@
+{
+  "_comment": "Policy focused on OS command injection and code execution",
+  "sources": [
+    "input",
+    "get_param",
+    "post_param",
+    "env_var",
+    "read_file"
+  ],
+  "sinks": [
+    "exec",
+    "system",
+    "eval",
+    "shell_exec",
+    "popen"
+  ],
+  "sanitizers": [
+    "validate",
+    "sanitize",
+    "clean",
+    "escape_shell"
+  ]
+}

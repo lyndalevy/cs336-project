@@ -1,0 +1,29 @@
+{
+  "sources": [
+    "input",
+    "get_param",
+    "post_param",
+    "read_file",
+    "env_var"
+  ],
+  "sinks": [
+    "sql_exec",
+    "sql_query",
+    "html_output",
+    "eval",
+    "exec",
+    "system",
+    "redirect",
+    "send_response",
+    "print"
+  ],
+  "sanitizers": [
+    "escape",
+    "validate",
+    "sanitize",
+    "encode",
+    "html_escape",
+    "parameterize",
+    "clean"
+  ]
+}

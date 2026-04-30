@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaintTrace — Static Taint Analysis Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0c0f;
+    --surface:   #111418;
+    --border:    #1e2530;
+    --accent:    #00e5a0;
+    --accent2:   #ff4d6d;
+    --accent3:   #4d9fff;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --source-c:  #4d9fff;
+    --sink-c:    #ff4d6d;
+    --sanitize-c:#00e5a0;
+    --warn-c:    #fbbf24;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem;
+    background: rgba(10,12,15,.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+  }
+
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: .85rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: .08em;
+  }
+
+  nav ul {
+    display: flex; gap: 2rem; list-style: none;
+  }
+
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    transition: color .2s;
+  }
+
+  nav a:hover { color: var(--accent); }
+
+  /* ── Hero ── */
+  #hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 8rem 2rem 4rem;
+    overflow: hidden;
+  }
+
+  .hero-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,229,160,.08) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .hero-content {
+    position: relative;
+    text-align: center;
+    max-width: 800px;
+  }
+
+  .hero-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--accent);
+    border: 1px solid rgba(0,229,160,.3);
+    padding: .3rem .8rem;
+    border-radius: 999px;
+    letter-spacing: .12em;
+    margin-bottom: 1.5rem;
+    animation: fadeIn .6s ease both;
+  }
+
+  h1 {
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -.03em;
+    animation: fadeIn .7s .1s ease both;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .hero-sub {
+    margin-top: 1.2rem;
+    font-size: 1.1rem;
+    color: var(--muted);
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+    animation: fadeIn .7s .2s ease both;
+  }
+
+  .hero-ctas {
+    margin-top: 2.5rem;
+    display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+    animation: fadeIn .7s .3s ease both;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .75rem 1.75rem;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-decoration: none;
+    transition: all .2s;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,229,160,.25); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+
+  /* ── Sections ── */
+  section {
+    position: relative;
+    padding: 5rem 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--accent);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    margin-bottom: .75rem;
+  }
+
+  h2 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    margin-bottom: 1rem;
+  }
+
+  .section-intro {
+    color: var(--muted);
+    max-width: 560px;
+    margin-bottom: 3rem;
+    font-size: 1rem;
+  }
+
+  /* ── How it works ── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, transform .2s;
+  }
+
+  .step:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+  .step::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .step:hover::before { opacity: 1; }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--accent);
+    letter-spacing: .1em;
+    margin-bottom: .75rem;
+  }
+
+  .step h3 {
+    font-size: .95rem;
+    font-weight: 700;
+    margin-bottom: .5rem;
+  }
+
+  .step p {
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── Install ── */
+  .install-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .install-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-btn {
+    padding: .75rem 1.5rem;
+    font-family: var(--mono);
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color .2s, background .2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.03); }
+
+  .tab-panel { display: none; padding: 1.5rem; }
+  .tab-panel.active { display: block; }
+
+  pre {
+    font-family: var(--mono);
+    font-size: .78rem;
+    line-height: 1.8;
+    color: var(--text);
+    overflow-x: auto;
+  }
+
+  pre .comment { color: var(--muted); }
+  pre .cmd     { color: var(--accent); }
+  pre .flag    { color: var(--accent3); }
+  pre .file    { color: var(--warn-c); }
+
+  /* ── Demo ── */
+  .demo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  @media (max-width: 700px) { .demo-grid { grid-template-columns: 1fr; } }
+
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .demo-card:hover { border-color: rgba(255,255,255,.15); }
+
+  .demo-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,.02);
+  }
+
+  .demo-title {
+    font-family: var(--mono);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: .62rem;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: .06em;
+  }
+  .badge-danger  { background: rgba(255,77,109,.15); color: var(--sink-c);     border: 1px solid rgba(255,77,109,.25); }
+  .badge-safe    { background: rgba(0,229,160,.12);  color: var(--sanitize-c); border: 1px solid rgba(0,229,160,.25); }
+
+  .demo-code {
+    padding: 1rem;
+    font-family: var(--mono);
+    font-size: .73rem;
+    line-height: 1.9;
+  }
+
+  .tok-source    { color: var(--source-c); font-weight: 600; }
+  .tok-sink      { color: var(--sink-c);   font-weight: 600; }
+  .tok-sanitizer { color: var(--sanitize-c); font-weight: 600; }
+  .tok-assign    { color: var(--muted); }
+  .tok-kw        { color: #c678dd; }
+  .tok-str       { color: var(--warn-c); }
+  .tok-comment   { color: #3d4a60; font-style: italic; }
+  .tok-flow      { color: var(--muted); }
+
+  .demo-output {
+    border-top: 1px solid var(--border);
+    padding: .75rem 1rem;
+    font-family: var(--mono);
+    font-size: .72rem;
+    line-height: 1.7;
+  }
+
+  .output-warn { color: var(--warn-c); }
+  .output-clean { color: var(--sanitize-c); }
+  .output-path { color: var(--muted); }
+  .output-source { color: var(--source-c); }
+  .output-sink { color: var(--sink-c); }
+
+  /* ── Tests table ── */
+  .tests-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+  }
+
+  .tests-table th {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: .75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tests-table td {
+    padding: .8rem 1rem;
+    border-bottom: 1px solid rgba(30,37,48,.6);
+    vertical-align: top;
+  }
+
+  .tests-table tr:last-child td { border-bottom: none; }
+  .tests-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  .tests-table .filename {
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--warn-c);
+  }
+
+  .tests-table .expect-warn { color: var(--sink-c); font-weight: 600; font-size: .75rem; }
+  .tests-table .expect-clean { color: var(--sanitize-c); font-weight: 600; font-size: .75rem; }
+
+  /* ── Policy ── */
+  .policy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .policy-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    transition: border-color .2s;
+  }
+  .policy-card:hover { border-color: rgba(255,255,255,.15); }
+
+  .policy-card h3 {
+    font-size: .85rem;
+    font-weight: 700;
+    margin-bottom: .3rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+
+  .policy-card p {
+    font-size: .78rem;
+    color: var(--muted);
+    margin-bottom: .75rem;
+  }
+
+  .policy-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-source    { background: var(--source-c); }
+  .dot-sink      { background: var(--sink-c); }
+  .dot-sanitizer { background: var(--sanitize-c); }
+
+  .json-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+  }
+
+  .json-key     { color: var(--accent3); }
+  .json-str     { color: var(--warn-c); }
+  .json-bracket { color: var(--muted); }
+  .json-comma   { color: var(--muted); }
+
+  /* ── Python section ── */
+  .lang-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .25rem .75rem;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin-right: .5rem;
+    margin-bottom: .5rem;
+  }
+  .lang-imp    { background: rgba(77,159,255,.12); color: var(--accent3); border: 1px solid rgba(77,159,255,.25); }
+  .lang-python { background: rgba(255,187,0,.1);   color: #fbbf24;       border: 1px solid rgba(255,187,0,.25); }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--muted);
+  }
+
+  footer a { color: var(--accent); text-decoration: none; }
+
+  /* ── Animations ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">// TaintTrace</div>
+  <ul>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#demo">Demo</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#policy">Policy</a></li>
+    <li><a href="#python">Python</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section id="hero" style="max-width:100%;padding-top:0;padding-bottom:0;">
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge">CS336 · Program Analysis for Security & Privacy</div>
+    <h1>Find taint bugs<br><span>before they ship.</span></h1>
+    <p class="hero-sub">
+      A static taint analysis tool that tracks untrusted user input through your
+      program — catching SQL injection, XSS, and command injection without running it.
+    </p>
+    <div class="hero-ctas">
+      <a href="#install" class="btn btn-primary">Get Started</a>
+      <a href="#demo" class="btn btn-ghost">See it in action</a>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how">
+  <div class="section-label">How it works</div>
+  <h2>Three-phase analysis</h2>
+  <p class="section-intro">
+    TaintTrace statically propagates taint labels through your program's AST,
+    merging branches with sound over-approximation and reaching a fixed point over loops.
+  </p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01 — SOURCE</div>
+      <h3>Mark user input</h3>
+      <p>Any value entering from <code style="color:var(--source-c)">input</code>, <code style="color:var(--source-c)">get_param</code>, <code style="color:var(--source-c)">request.args</code> etc. is marked <em>tainted</em>.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02 — PROPAGATE</div>
+      <h3>Track through code</h3>
+      <p>Assignments, binary ops, if/else branches, and while loops — taint flows through all of them. Fixed-point iteration handles loops.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03 — SINK</div>
+      <h3>Detect violations</h3>
+      <p>If a tainted value reaches a dangerous operation like <code style="color:var(--sink-c)">sql_exec</code> or <code style="color:var(--sink-c)">eval</code> without being sanitized, a warning is emitted.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">04 — SANITIZER</div>
+      <h3>Respect clean paths</h3>
+      <p>Calls to <code style="color:var(--sanitize-c)">escape</code>, <code style="color:var(--sanitize-c)">parameterize</code>, or your custom sanitizers remove the taint label — no false alarm.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Install -->
+<section id="install">
+  <div class="section-label">Installation</div>
+  <h2>Get running in under a minute</h2>
+  <p class="section-intro">Choose your platform. OCaml required for <code style="color:var(--warn-c)">.imp</code> files; Python 3.8+ for native <code style="color:var(--warn-c)">.py</code> analysis.</p>
+
+  <div class="install-block">
+    <div class="install-tabs">
+      <button class="tab-btn active" onclick="switchTab(event,'mac')">macOS / Linux</button>
+      <button class="tab-btn" onclick="switchTab(event,'windows')">Windows (WSL)</button>
+      <button class="tab-btn" onclick="switchTab(event,'python-install')">Python mode</button>
+    </div>
+
+    <div id="tab-mac" class="tab-panel active">
+<pre><span class="comment"># 1. Install OCaml and Dune (if you don't have them)</span>
+<span class="cmd">brew install opam</span>                              <span class="comment"># macOS</span>
+<span class="cmd">sudo apt install opam build-essential -y</span>       <span class="comment"># Ubuntu/Debian</span>
+<span class="cmd">opam init -y && eval $(opam env)</span>
+<span class="cmd">opam install dune -y</span>
+
+<span class="comment"># 2. Clone and build</span>
+<span class="cmd">git clone https://github.com/yourusername/taint_analysis</span>
+<span class="cmd">cd taint_analysis</span>
+<span class="cmd">dune build</span>
+
+<span class="comment"># 3. Run on any .imp file</span>
+<span class="cmd">dune exec src/main.exe --</span> <span class="file">tests/test1_sqli.imp</span>
+
+<span class="comment"># 4. Or supply a custom policy</span>
+<span class="cmd">dune exec src/main.exe --</span> <span class="flag">--policy</span> <span class="file">policies/webapp.json</span> <span class="file">tests/test1_sqli.imp</span></pre>
+    </div>
+
+    <div id="tab-windows" class="tab-panel">
+<pre><span class="comment"># Open WSL (Windows Subsystem for Linux)</span>
+<span class="cmd">wsl</span>
+
+<span class="comment"># Install dependencies</span>
+<span class="cmd">sudo apt install opam build-essential -y</span>
+<span class="cmd">opam init -y && eval $(opam env) && opam install dune -y</span>
+
+<span class="comment"># Build and run</span>
+<span class="cmd">cd ~/taint_analysis</span>
+<span class="cmd">dune build</span>
+<span class="cmd">dune exec src/main.exe --</span> <span class="file">tests/test1_sqli.imp</span></pre>
+    </div>
+
+    <div id="tab-python-install" class="tab-panel">
+<pre><span class="comment"># No installation needed beyond Python 3.8+</span>
+<span class="cmd">python3 --version</span>          <span class="comment"># must be 3.8 or newer</span>
+
+<span class="comment"># Run directly on any .py file</span>
+<span class="cmd">python3 python_frontend/taint_py.py</span> <span class="file">tests/test_sqli.py</span>
+
+<span class="comment"># With a custom policy file</span>
+<span class="cmd">python3 python_frontend/taint_py.py</span> <span class="flag">--policy</span> <span class="file">policies/webapp.json</span> <span class="file">tests/test_sqli.py</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- Demo -->
+<section id="demo">
+  <div class="section-label">Demo</div>
+  <h2>See taint analysis in action</h2>
+  <p class="section-intro">Six representative programs — from raw injection to properly sanitized code. Click any card to explore.</p>
+
+  <div class="demo-grid">
+
+    <!-- SQL injection -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test1_sqli.imp</span>
+        <span class="badge badge-danger">⚠ WARNING</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># tainted input flows to sql_exec</span><br>
+        <span class="tok-source">input</span> <span class="tok-assign">user</span><br>
+        query <span class="tok-assign">:=</span> user<br>
+        <span class="tok-sink">sql_exec</span>(query)
+      </div>
+      <div class="demo-output">
+        <span class="output-warn">WARNING</span> Tainted data at line 3<br>
+        <span class="output-path">  Source: </span><span class="output-source">input</span> → user (line 1)<br>
+        <span class="output-path">  Sink:   </span><span class="output-sink">sql_exec</span> (line 3)<br>
+        <span class="output-path">  Path:   user → query → sql_exec</span>
+      </div>
+    </div>
+
+    <!-- Sanitized -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test2_sanitized.imp</span>
+        <span class="badge badge-safe">✓ CLEAN</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># sanitizer removes taint</span><br>
+        <span class="tok-source">input</span> <span class="tok-assign">user</span><br>
+        <span class="tok-sanitizer">sanitize</span>(user)<br>
+        <span class="tok-sink">sql_exec</span>(user)  <span class="tok-comment"># now safe</span>
+      </div>
+      <div class="demo-output">
+        <span class="output-clean">No taint violations found. Program is clean.</span>
+      </div>
+    </div>
+
+    <!-- Propagation chain -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test3_propagation.imp</span>
+        <span class="badge badge-danger">⚠ WARNING</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># taint tracked through chain</span><br>
+        <span class="tok-source">input</span> <span class="tok-assign">x</span><br>
+        a <span class="tok-assign">:=</span> x<br>
+        b <span class="tok-assign">:=</span> a<br>
+        <span class="tok-sink">html_output</span>(b)
+      </div>
+      <div class="demo-output">
+        <span class="output-warn">WARNING</span> Tainted data at line 4<br>
+        <span class="output-path">  Path:   x → a → b → html_output</span>
+      </div>
+    </div>
+
+    <!-- Conditional -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test4_conditional.imp</span>
+        <span class="badge badge-danger">⚠ WARNING</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># branch merging (sound over-approx)</span><br>
+        <span class="tok-source">input</span> <span class="tok-assign">user</span><br>
+        <span class="tok-kw">if</span> user <span class="tok-kw">then</span><br>
+        &nbsp; safe <span class="tok-assign">:=</span> <span class="tok-str">1</span><br>
+        <span class="tok-kw">else</span><br>
+        &nbsp; safe <span class="tok-assign">:=</span> user  <span class="tok-comment"># tainted branch</span><br>
+        <span class="tok-kw">end</span><br>
+        <span class="tok-sink">sql_exec</span>(safe)
+      </div>
+      <div class="demo-output">
+        <span class="output-warn">WARNING</span> Branch merging catches taint<br>
+        <span class="output-path">  'safe' may be tainted (else branch)</span>
+      </div>
+    </div>
+
+    <!-- Loop -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test5_loop.imp</span>
+        <span class="badge badge-danger">⚠ WARNING</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># fixed-point catches taint in loops</span><br>
+        <span class="tok-source">input</span> <span class="tok-assign">x</span><br>
+        acc <span class="tok-assign">:=</span> <span class="tok-str">0</span><br>
+        <span class="tok-kw">while</span> x <span class="tok-kw">do</span><br>
+        &nbsp; acc <span class="tok-assign">:=</span> acc + x<br>
+        <span class="tok-kw">end</span><br>
+        <span class="tok-sink">sql_exec</span>(acc)
+      </div>
+      <div class="demo-output">
+        <span class="output-warn">WARNING</span> Fixed-point iteration detects<br>
+        <span class="output-path">  taint accumulated in loop variable</span>
+      </div>
+    </div>
+
+    <!-- Clean -->
+    <div class="demo-card">
+      <div class="demo-header">
+        <span class="demo-title">test6_clean.imp</span>
+        <span class="badge badge-safe">✓ CLEAN</span>
+      </div>
+      <div class="demo-code">
+        <span class="tok-comment"># no taint — no false positives</span><br>
+        x <span class="tok-assign">:=</span> <span class="tok-str">42</span><br>
+        y <span class="tok-assign">:=</span> x + <span class="tok-str">1</span><br>
+        <span class="tok-sink">sql_exec</span>(y)
+      </div>
+      <div class="demo-output">
+        <span class="output-clean">No taint violations found. Program is clean.</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Tests table -->
+<section id="tests">
+  <div class="section-label">Test suite</div>
+  <h2>All test cases explained</h2>
+  <p class="section-intro">Complete reference for every bundled test — what it checks and what output to expect.</p>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+    <table class="tests-table">
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Language</th>
+          <th>What it checks</th>
+          <th>Expected</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="filename">test1_sqli.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td>User input flows directly to <code style="color:var(--sink-c)">sql_exec</code> with no sanitization</td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test2_sanitized.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td><code style="color:var(--sanitize-c)">sanitize()</code> is called before the sink — verifies false-positive suppression</td>
+          <td class="expect-clean">CLEAN</td>
+        </tr>
+        <tr>
+          <td class="filename">test3_propagation.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td>Taint tracked through a multi-hop assignment chain (x → a → b → sink)</td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test4_conditional.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td>Branch merging: only one branch assigns a tainted value, but analysis is sound</td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test5_loop.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td>Fixed-point iteration detects taint propagated through a while loop accumulator</td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test6_clean.imp</td>
+          <td><span class="lang-badge lang-imp">IMP</span></td>
+          <td>Only constant data reaches the sink — validates zero false positives on clean code</td>
+          <td class="expect-clean">CLEAN</td>
+        </tr>
+        <tr>
+          <td class="filename">test_sqli.py</td>
+          <td><span class="lang-badge lang-python">Python</span></td>
+          <td>Real Python: <code style="color:var(--source-c)">input()</code> flows to <code style="color:var(--sink-c)">cursor.execute()</code> — classic SQLi</td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test_sanitized.py</td>
+          <td><span class="lang-badge lang-python">Python</span></td>
+          <td>Real Python: <code style="color:var(--sanitize-c)">parameterize()</code> cleans input before cursor.execute</td>
+          <td class="expect-clean">CLEAN</td>
+        </tr>
+        <tr>
+          <td class="filename">test_xss.py</td>
+          <td><span class="lang-badge lang-python">Python</span></td>
+          <td>Flask route: <code style="color:var(--source-c)">request.args.get()</code> flows to <code style="color:var(--sink-c)">render_template_string()</code></td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+        <tr>
+          <td class="filename">test_cmdinject.py</td>
+          <td><span class="lang-badge lang-python">Python</span></td>
+          <td>OS command injection: user input reaches <code style="color:var(--sink-c)">os.system()</code></td>
+          <td class="expect-warn">1 WARNING</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Policy -->
+<section id="policy">
+  <div class="section-label">External Policy</div>
+  <h2>Define your own sources, sinks, sanitizers</h2>
+  <p class="section-intro">
+    Pass any JSON policy file with <code style="color:var(--accent)">--policy</code> to override the built-in rules.
+    Mix and match to fit your tech stack — three bundled policies included.
+  </p>
+
+  <div class="policy-grid">
+    <div class="policy-card">
+      <h3><span class="policy-dot dot-source"></span>sources</h3>
+      <p>Functions or constructs that introduce untrusted data into the program.</p>
+      <code style="font-family:var(--mono);font-size:.75rem;color:var(--source-c)">input, get_param, request.args.get …</code>
+    </div>
+    <div class="policy-card">
+      <h3><span class="policy-dot dot-sink"></span>sinks</h3>
+      <p>Dangerous operations that must never receive tainted data without sanitization.</p>
+      <code style="font-family:var(--mono);font-size:.75rem;color:var(--sink-c)">sql_exec, eval, os.system, innerHTML …</code>
+    </div>
+    <div class="policy-card">
+      <h3><span class="policy-dot dot-sanitizer"></span>sanitizers</h3>
+      <p>Functions that clean tainted data — calling them removes the taint label.</p>
+      <code style="font-family:var(--mono);font-size:.75rem;color:var(--sanitize-c)">escape, parameterize, html_escape …</code>
+    </div>
+  </div>
+
+  <div class="json-block">
+<pre><span class="json-bracket">{</span>
+  <span class="json-key">"sources"</span>: <span class="json-bracket">[</span>
+    <span class="json-str">"input"</span><span class="json-comma">,</span>
+    <span class="json-str">"get_param"</span><span class="json-comma">,</span>
+    <span class="json-str">"post_param"</span><span class="json-comma">,</span>
+    <span class="json-str">"cookie"</span>
+  <span class="json-bracket">]</span><span class="json-comma">,</span>
+  <span class="json-key">"sinks"</span>: <span class="json-bracket">[</span>
+    <span class="json-str">"sql_exec"</span><span class="json-comma">,</span>
+    <span class="json-str">"html_output"</span><span class="json-comma">,</span>
+    <span class="json-str">"eval"</span>
+  <span class="json-bracket">]</span><span class="json-comma">,</span>
+  <span class="json-key">"sanitizers"</span>: <span class="json-bracket">[</span>
+    <span class="json-str">"my_custom_escape"</span><span class="json-comma">,</span>
+    <span class="json-str">"validate_input"</span>
+  <span class="json-bracket">]</span>
+<span class="json-bracket">}</span></pre>
+  </div>
+
+  <p style="margin-top:1rem;font-size:.82rem;color:var(--muted)">
+    Bundled policies: <code style="color:var(--warn-c)">policies/default.json</code> · <code style="color:var(--warn-c)">policies/webapp.json</code> · <code style="color:var(--warn-c)">policies/cmdinject.json</code>
+  </p>
+</section>
+
+<!-- Python section -->
+<section id="python">
+  <div class="section-label">Real Language Support</div>
+  <h2>Analyze real Python code</h2>
+  <p class="section-intro">
+    <code style="color:var(--warn-c)">python_frontend/taint_py.py</code> uses Python's built-in <code>ast</code> module to analyze real <code>.py</code> files — no OCaml needed. It detects SQLi, XSS, and command injection in Flask, Django, and plain Python.
+  </p>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;">
+    <div class="demo-header" style="padding:.75rem 1rem;">
+      <span class="demo-title">Flask XSS example — test_xss.py</span>
+      <span class="badge badge-danger">⚠ WARNING</span>
+    </div>
+    <div class="demo-code" style="padding:1rem;">
+      <span class="tok-kw">from</span> flask <span class="tok-kw">import</span> Flask, request, render_template_string<br><br>
+      <span class="tok-kw">@app.route</span>(<span class="tok-str">"/search"</span>)<br>
+      <span class="tok-kw">def</span> search():<br>
+      &nbsp; query = <span class="tok-source">request.args.get</span>(<span class="tok-str">"q"</span>)  <span class="tok-comment"># SOURCE</span><br>
+      &nbsp; template = <span class="tok-str">f"&lt;h1&gt;{query}&lt;/h1&gt;"</span><br>
+      &nbsp; <span class="tok-kw">return</span> <span class="tok-sink">render_template_string</span>(template)  <span class="tok-comment"># SINK — XSS!</span>
+    </div>
+    <div class="demo-output">
+      <span class="output-warn">WARNING</span> Tainted data flows to sink at line 10<br>
+      <span class="output-path">  Source: </span><span class="output-source">request.args.get</span> at line 8<br>
+      <span class="output-path">  Sink:   </span><span class="output-sink">render_template_string</span> at line 10<br>
+      <span class="output-path">  Path:   request.args.get → template → render_template_string</span>
+    </div>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;">
+    <div class="section-label" style="margin-bottom:.5rem;">Supported Python constructs</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:.5rem;">
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Assignment propagation</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">if/else branch merging</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">for/while fixed-point</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Function call sinks</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Method call sinks (cursor.execute)</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Flask / Django sources</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Handler auto-detection</span></div>
+      <div style="font-size:.8rem;color:var(--muted)">✓ <span style="color:var(--text)">Custom policy JSON</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>TaintTrace · CS336 Spring 2026 · Built with OCaml and Python's <code>ast</code> module</p>
+  <p style="margin-top:.5rem;">
+    <a href="https://github.com/yourusername/taint_analysis">GitHub</a> ·
+    Sources tracked · Sinks detected · Sanitizers respected
+  </p>
+</footer>
+
+<script>
+function switchTab(e, id) {
+  // deactivate all tabs
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  // activate clicked
+  e.target.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+</script>
+
+</body>
+</html>
